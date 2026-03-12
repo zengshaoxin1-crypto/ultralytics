@@ -150,7 +150,7 @@ jobs:
         run: coverage run -a --source=ultralytics -m ultralytics.cfg.__init__ benchmark model='path with spaces/${{ matrix.model }}-pose.pt' imgsz=160 verbose=0.194
       - name: Benchmark OBBModel
         shell: bash
-        run: coverage run -a --source=ultralytics -m ultralytics.cfg.__init__ benchmark model='path with spaces/${{ matrix.model }}-obb.pt' imgsz=160 verbose=0.374
+        run: coverage run -a --source=ultralytics -m ultralytics.cfg.__init__ benchmark model='path with spaces/${{ matrix.model }}-obb.pt' imgsz=160 verbose=0.372
       - name: Merge Coverage Reports
         run: |
           coverage xml -o coverage-benchmarks.xml
@@ -416,7 +416,7 @@ jobs:
       - name: Benchmark PoseModel
         run: python -m ultralytics.cfg.__init__ benchmark model='yolo26n-pose.pt' imgsz=160 verbose=0.194
       - name: Benchmark OBBModel
-        run: python -m ultralytics.cfg.__init__ benchmark model='yolo26n-obb.pt' imgsz=160 verbose=0.374
+        run: python -m ultralytics.cfg.__init__ benchmark model='yolo26n-obb.pt' imgsz=160 verbose=0.372
       - name: Benchmark Summary
         run: |
           cat benchmarks.log
