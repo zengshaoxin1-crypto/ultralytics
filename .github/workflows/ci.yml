@@ -154,6 +154,8 @@ jobs:
       - name: Merge Coverage Reports
         run: |
           coverage xml -o coverage-benchmarks.xml
+      - name: Install gpg
+        run: sudo apt-get update && sudo apt-get install -y gpg
       - name: Upload Coverage Reports to CodeCov
         if: github.repository == 'ultralytics/ultralytics'
         uses: codecov/codecov-action@v5
@@ -211,6 +213,8 @@ jobs:
       - name: Pytest tests
         shell: bash # for Windows compatibility
         run: pytest --cov=ultralytics/ --cov-report=xml tests/
+      - name: Install gpg
+        run: sudo apt-get update && sudo apt-get install -y gpg
       - name: Upload Coverage Reports to CodeCov
         if: github.repository == 'ultralytics/ultralytics' # && matrix.os == 'cpu-latest' && matrix.python == '3.12'
         uses: codecov/codecov-action@v5
