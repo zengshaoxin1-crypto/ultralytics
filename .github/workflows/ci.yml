@@ -54,7 +54,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [cpu-latest]
+        os: [ubuntu-latest]
         python: ["3.12"]
     steps:
       - uses: actions/checkout@v6
@@ -482,7 +482,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [cpu-latest]
+        os: [ubuntu-latest]
         python: ["3.12"]
     defaults:
       run:
