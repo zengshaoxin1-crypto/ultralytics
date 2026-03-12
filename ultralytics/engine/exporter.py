@@ -1237,7 +1237,6 @@ class Exporter:
         if subprocess.run(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, shell=True).returncode != 0:
             LOGGER.info(f"\n{prefix} export requires Edge TPU compiler. Attempting install from {help_url}")
             sudo = "sudo " if is_sudo_available() else ""
-            check_apt_requirements(["gpg"])
             for c in (
                 f"{sudo}mkdir -p /etc/apt/keyrings",
                 f"curl -fsSL https://packages.cloud.google.com/apt/doc/apt-key.gpg | {sudo}gpg --dearmor -o /etc/apt/keyrings/google.gpg",
