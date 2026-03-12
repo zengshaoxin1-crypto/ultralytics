@@ -548,17 +548,7 @@ jobs:
 
   Summary:
     runs-on: cpu-latest
-    needs:
-      [
-        HUB,
-        Benchmarks,
-        Tests,
-        SlowTests,
-        GPU,
-        RaspberryPi,
-        NVIDIA_Jetson,
-        Conda,
-      ]
+    needs: [HUB, Benchmarks, Tests, SlowTests, GPU, RaspberryPi, NVIDIA_Jetson, Conda]
     if: always()
     steps:
       - name: Check for failure and notify
