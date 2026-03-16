@@ -59,6 +59,8 @@ from .block import (
     ResNetLayer,
     SCDown,
     TorchVision,
+    Conv_withoutBN,
+    SCAM, 
 )
 from .conv import (
     CBAM,
@@ -187,4 +189,6 @@ __all__ = (
     "YOLOESegment",
     "YOLOESegment26",
     "v10Detect",
+    "Conv_withoutBN",
+    "SCAM",
 )
