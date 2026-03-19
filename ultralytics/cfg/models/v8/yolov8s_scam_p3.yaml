@@ -1,7 +1,6 @@
 # Ultralytics 🚀 AGPL-3.0 License - https://ultralytics.com/license
 
-# Parameters
-nc: 1 # number of classes
+nc: 1
 scales:
   n: [0.33, 0.25, 1024]
   s: [0.33, 0.50, 1024]
@@ -9,7 +8,6 @@ scales:
   l: [1.00, 1.00, 512]
   x: [1.00, 1.25, 512]
 
-# Backbone
 backbone:
   # [from, repeats, module, args]
   - [-1, 1, Conv, [64, 3, 2]]      # 0-P1/2
@@ -23,23 +21,23 @@ backbone:
   - [-1, 3, C2f, [1024, True]]     # 8
   - [-1, 1, SPPF, [1024, 5]]       # 9
 
-# Head
 head:
-  - [-1, 1, nn.Upsample, [None, 2, "nearest"]]   # 10
-  - [[-1, 6], 1, Concat, [1]]                    # 11 cat backbone P4
-  - [-1, 3, C2f, [512]]                          # 12
+  - [-1, 1, nn.Upsample, [None, 2, nearest]]   # 10
+  - [[-1, 6], 1, Concat, [1]]                  # 11
+  - [-1, 3, C2f, [512]]                        # 12
 
-  - [-1, 1, nn.Upsample, [None, 2, "nearest"]]   # 13
-  - [[-1, 4], 1, Concat, [1]]                    # 14 cat backbone P3
-  - [-1, 3, C2f, [256]]                          # 15 (P3/8-small)
-  - [-1, 1, SCAM, []]                            # 16 新增 SCAM 直接挂空即可，在模块内会根据输入自动计算参数
+  - [-1, 1, nn.Upsample, [None, 2, nearest]]   # 13
+  - [[-1, 4], 1, Concat, [1]]                  # 14
+  - [-1, 3, C2f, [256]]                        # 15 P3
 
-  - [-1, 1, Conv, [256, 3, 2]]                   # 17
-  - [[-1, 12], 1, Concat, [1]]                   # 18 cat head P4
-  - [-1, 3, C2f, [512]]                          # 19 (P4/16-medium)
+  - [-1, 1, SCAM, []]                          # 16 SCAM-enhanced P3
+  - [16, 1, Conv, [256, 3, 2]]                 # 17 downsample SCAM P3 for P4 path
 
-  - [-1, 1, Conv, [512, 3, 2]]                   # 20
-  - [[-1, 9], 1, Concat, [1]]                    # 21 cat head P5
-  - [-1, 3, C2f, [1024]]                         # 22 (P5/32-large)
+  - [[-1, 12], 1, Concat, [1]]                 # 18
+  - [-1, 3, C2f, [512]]                        # 19 P4
 
-  - [[16, 19, 22], 1, Detect, [nc]]              # Detect(P3, P4, P5)
+  - [-1, 1, Conv, [512, 3, 2]]                 # 20
+  - [[-1, 9], 1, Concat, [1]]                  # 21
+  - [-1, 3, C2f, [1024]]                       # 22 P5
+
+  - [[16, 19, 22], 1, Detect, [nc]]            # 23 Detect(P3, P4, P5)
