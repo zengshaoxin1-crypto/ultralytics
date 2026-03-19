@@ -77,6 +77,7 @@ from .conv import (
     LightConv,
     RepConv,
     SpatialAttention,
+    WConcat,
 )
 from .head import (
     OBB,
@@ -184,6 +185,7 @@ __all__ = (
     "TransformerBlock",
     "TransformerEncoderLayer",
     "TransformerLayer",
+    "WConcat",
     "WorldDetect",
     "YOLOEDetect",
     "YOLOESegment",

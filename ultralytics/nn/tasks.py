@@ -68,6 +68,7 @@ from ultralytics.nn.modules import (
     Segment26,
     TorchVision,
     WorldDetect,
+    WConcat,
     YOLOEDetect,
     YOLOESegment,
     YOLOESegment26,
@@ -1677,8 +1678,10 @@ def parse_model(d, ch, verbose=True):
             c2 = args[1] if args[3] else args[1] * 4
         elif m is torch.nn.BatchNorm2d:
             args = [ch[f]]
-        elif m is Concat:
+        elif m in frozenset({Concat, WConcat}):
             c2 = sum(ch[x] for x in f)
+            if m is WConcat:
+                args = [len(f), *args]
         elif m in frozenset(
             {
                 Detect,

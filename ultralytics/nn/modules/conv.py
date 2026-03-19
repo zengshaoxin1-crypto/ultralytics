@@ -8,6 +8,7 @@ import math
 import numpy as np
 import torch
 import torch.nn as nn
+import torch.nn.functional as F
 
 __all__ = (
     "CBAM",
@@ -24,6 +25,7 @@ __all__ = (
     "LightConv",
     "RepConv",
     "SpatialAttention",
+    "WConcat",
 )
 
 
@@ -639,6 +641,26 @@ class Concat(nn.Module):
             (torch.Tensor): Concatenated tensor.
         """
         return torch.cat(x, self.d)
+
+
+class WConcat(nn.Module):
+    """Weighted concatenation with learnable fusion coefficients.
+
+    This keeps the channel dimensions of concat-based necks unchanged while allowing the
+    model to softly emphasize more useful feature levels for small-object detection.
+    """
+
+    def __init__(self, n: int, dimension: int = 1, eps: float = 1e-4):
+        super().__init__()
+        self.d = dimension
+        self.eps = eps
+        self.weights = nn.Parameter(torch.ones(n, dtype=torch.float32))
+
+    def forward(self, x: list[torch.Tensor]):
+        """Scale each branch with normalized positive weights, then concatenate."""
+        w = F.relu(self.weights)
+        w = w / (w.sum() + self.eps)
+        return torch.cat([wi * xi for wi, xi in zip(w, x)], self.d)
 
 
 class Index(nn.Module):
