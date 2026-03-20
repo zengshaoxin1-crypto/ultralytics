@@ -11,7 +11,16 @@ import torch.nn.functional as F
 
 from ultralytics.utils.metrics import OKS_SIGMA, RLE_WEIGHT
 from ultralytics.utils.ops import crop_mask, xywh2xyxy, xyxy2xywh
-from ultralytics.utils.tal import RotatedTaskAlignedAssigner, TaskAlignedAssigner, dist2bbox, dist2rbox, make_anchors
+from ultralytics.utils.tal import (
+    RotatedTaskAlignedAssigner,
+    SGDATaskAlignedAssigner,
+    TaskAlignedAssigner,
+    bbox_scale_similarity,
+    dist2bbox,
+    dist2rbox,
+    make_anchors,
+    small_object_boost,
+)
 from ultralytics.utils.torch_utils import autocast
 
 from .metrics import bbox_iou, probiou
@@ -151,6 +160,44 @@ class BboxLoss(nn.Module):
             loss_dfl = loss_dfl.sum() / target_scores_sum
 
         return loss_iou, loss_dfl
+
+
+class SGDABboxLoss(BboxLoss):
+    """Tiny-object-aware box loss with an extra scale-guided similarity term."""
+
+    def __init__(self, reg_max: int = 16, geo_weight: float = 0.35, small_boost_strength: float = 0.35):
+        super().__init__(reg_max)
+        self.geo_weight = geo_weight
+        self.small_boost_strength = small_boost_strength
+
+    def forward(
+        self,
+        pred_dist: torch.Tensor,
+        pred_bboxes: torch.Tensor,
+        anchor_points: torch.Tensor,
+        target_bboxes: torch.Tensor,
+        target_scores: torch.Tensor,
+        target_scores_sum: torch.Tensor,
+        fg_mask: torch.Tensor,
+        imgsz: torch.Tensor,
+        stride: torch.Tensor,
+    ) -> tuple[torch.Tensor, torch.Tensor]:
+        loss_iou, loss_dfl = super().forward(
+            pred_dist,
+            pred_bboxes,
+            anchor_points,
+            target_bboxes,
+            target_scores,
+            target_scores_sum,
+            fg_mask,
+            imgsz,
+            stride,
+        )
+        weight = target_scores.sum(-1)[fg_mask].unsqueeze(-1)
+        scale_sim = bbox_scale_similarity(target_bboxes[fg_mask], pred_bboxes[fg_mask]).unsqueeze(-1)
+        boost = small_object_boost(target_bboxes[fg_mask], strength=self.small_boost_strength).unsqueeze(-1)
+        loss_geo = ((1.0 - scale_sim) * weight * boost).sum() / target_scores_sum
+        return loss_iou + self.geo_weight * loss_geo, loss_dfl
 
 
 class RLELoss(nn.Module):
@@ -466,6 +513,30 @@ class v8DetectionLoss:
         batch_size = preds["boxes"].shape[0]
         loss, loss_detach = self.get_assigned_targets_and_loss(preds, batch)[1:]
         return loss * batch_size, loss_detach
+
+
+class SGDADetectionLoss(v8DetectionLoss):
+    """Detection loss using SGDA for tiny-object-aware assignment and regression."""
+
+    def __init__(self, model, tal_topk: int = 10, tal_topk2: int | None = None):
+        super().__init__(model, tal_topk=tal_topk, tal_topk2=tal_topk2)
+        self.assigner = SGDATaskAlignedAssigner(
+            topk=tal_topk,
+            num_classes=self.nc,
+            alpha=0.5,
+            beta=6.0,
+            stride=self.stride.tolist(),
+            topk2=tal_topk2,
+            assign_gamma=float(getattr(self.hyp, "sgda_assign_gamma", 0.35)),
+            small_boost=float(getattr(self.hyp, "sgda_small_boost", 0.35)),
+            small_ref=float(getattr(self.hyp, "sgda_small_ref", 64.0)),
+            max_boost=float(getattr(self.hyp, "sgda_max_boost", 1.5)),
+        )
+        self.bbox_loss = SGDABboxLoss(
+            self.reg_max,
+            geo_weight=float(getattr(self.hyp, "sgda_box_weight", 0.35)),
+            small_boost_strength=float(getattr(self.hyp, "sgda_small_boost", 0.35)),
+        ).to(self.device)
 
 
 class v8SegmentationLoss(v8DetectionLoss):

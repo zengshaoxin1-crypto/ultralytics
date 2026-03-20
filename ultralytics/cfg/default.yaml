@@ -38,6 +38,12 @@ profile: False # (bool) profile ONNX/TensorRT speeds during training for loggers
 freeze: # (int | list, optional) freeze first N layers (int) or specific layer indices (list)
 multi_scale: 0.0 # (float) multi-scale range as a fraction of imgsz; sizes are rounded to stride multiples
 compile: False # (bool | str) enable torch.compile() backend='inductor'; True="default", False=off, or "default|reduce-overhead|max-autotune-no-cudagraphs"
+sgda: False # (bool) enable scale-guided dynamic assignment for tiny object detection
+sgda_assign_gamma: 0.35 # (float) blend weight between IoU and scale-aware geometry in SGDA assigner
+sgda_box_weight: 0.35 # (float) extra loss weight for scale-aware geometric consistency
+sgda_small_boost: 0.35 # (float) boost strength for smaller objects in SGDA
+sgda_small_ref: 64.0 # (float) reference size controlling how strongly SGDA focuses on small objects
+sgda_max_boost: 1.5 # (float) upper bound of SGDA small-object gain
 
 # Segmentation
 overlap_mask: True # (bool) merge instance masks into one mask during training (segment only)

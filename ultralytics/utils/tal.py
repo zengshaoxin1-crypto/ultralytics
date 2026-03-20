@@ -11,6 +11,34 @@ from .ops import xywh2xyxy, xywhr2xyxyxyxy, xyxy2xywh
 from .torch_utils import TORCH_1_11
 
 
+def bbox_scale_similarity(gt_bboxes: torch.Tensor, pd_bboxes: torch.Tensor, eps: float = 1e-9) -> torch.Tensor:
+    """Return a scale-aware geometric similarity that is friendlier to tiny boxes than pure IoU."""
+    gt_centers = (gt_bboxes[..., :2] + gt_bboxes[..., 2:]) * 0.5
+    pd_centers = (pd_bboxes[..., :2] + pd_bboxes[..., 2:]) * 0.5
+    gt_wh = (gt_bboxes[..., 2:] - gt_bboxes[..., :2]).clamp_min(eps)
+    pd_wh = (pd_bboxes[..., 2:] - pd_bboxes[..., :2]).clamp_min(eps)
+
+    center_dist = (gt_centers - pd_centers).pow(2).sum(-1).sqrt()
+    diag = gt_wh.pow(2).sum(-1).sqrt().clamp_min(eps)
+    center_term = center_dist / diag
+    shape_term = torch.abs(torch.log((pd_wh + eps) / (gt_wh + eps))).sum(-1)
+    return torch.exp(-(center_term + 0.5 * shape_term)).clamp_(0, 1)
+
+
+def small_object_boost(
+    gt_bboxes: torch.Tensor,
+    strength: float = 0.35,
+    ref_size: float = 64.0,
+    max_boost: float = 1.5,
+    eps: float = 1e-9,
+) -> torch.Tensor:
+    """Return a bounded gain that emphasizes smaller objects more strongly."""
+    gt_wh = (gt_bboxes[..., 2:] - gt_bboxes[..., :2]).clamp_min(eps)
+    scale = torch.sqrt((gt_wh[..., 0] * gt_wh[..., 1]).clamp_min(eps))
+    boost = 1.0 + strength * torch.exp(-scale / max(ref_size, eps))
+    return boost.clamp_(1.0, max_boost)
+
+
 class TaskAlignedAssigner(nn.Module):
     """A task-aligned assigner for object detection.
 
@@ -394,6 +422,56 @@ class RotatedTaskAlignedAssigner(TaskAlignedAssigner):
         ap_dot_ab = (ap * ab).sum(dim=-1)
         ap_dot_ad = (ap * ad).sum(dim=-1)
         return (ap_dot_ab >= 0) & (ap_dot_ab <= norm_ab) & (ap_dot_ad >= 0) & (ap_dot_ad <= norm_ad)  # is_in_box
+
+
+class SGDATaskAlignedAssigner(TaskAlignedAssigner):
+    """Scale-guided dynamic assigner inspired by tiny object matching methods such as NWD and RFLA."""
+
+    def __init__(
+        self,
+        *args,
+        assign_gamma: float = 0.35,
+        small_boost: float = 0.35,
+        small_ref: float = 64.0,
+        max_boost: float = 1.5,
+        **kwargs,
+    ):
+        super().__init__(*args, **kwargs)
+        self.assign_gamma = assign_gamma
+        self.small_boost = small_boost
+        self.small_ref = small_ref
+        self.max_boost = max_boost
+
+    def get_box_metrics(self, pd_scores, pd_bboxes, gt_labels, gt_bboxes, mask_gt):
+        """Compute a tiny-object-aware alignment metric."""
+        na = pd_bboxes.shape[-2]
+        mask_gt = mask_gt.bool()
+        overlaps = torch.zeros([self.bs, self.n_max_boxes, na], dtype=pd_bboxes.dtype, device=pd_bboxes.device)
+        scale_sim = torch.zeros_like(overlaps)
+        bbox_scores = torch.zeros([self.bs, self.n_max_boxes, na], dtype=pd_scores.dtype, device=pd_scores.device)
+
+        ind = torch.zeros([2, self.bs, self.n_max_boxes], dtype=torch.long)
+        ind[0] = torch.arange(end=self.bs).view(-1, 1).expand(-1, self.n_max_boxes)
+        ind[1] = gt_labels.squeeze(-1)
+        bbox_scores[mask_gt] = pd_scores[ind[0], :, ind[1]][mask_gt]
+
+        pd_boxes = pd_bboxes.unsqueeze(1).expand(-1, self.n_max_boxes, -1, -1)[mask_gt]
+        gt_boxes = gt_bboxes.unsqueeze(2).expand(-1, -1, na, -1)[mask_gt]
+        overlaps[mask_gt] = self.iou_calculation(gt_boxes, pd_boxes)
+        scale_sim[mask_gt] = bbox_scale_similarity(gt_boxes, pd_boxes, eps=self.eps)
+
+        geo_metric = ((1.0 - self.assign_gamma) * overlaps + self.assign_gamma * scale_sim).clamp_min(self.eps)
+        boost = torch.ones_like(overlaps)
+        boost[mask_gt] = small_object_boost(
+            gt_boxes,
+            strength=self.small_boost,
+            ref_size=self.small_ref,
+            max_boost=self.max_boost,
+            eps=self.eps,
+        )
+
+        align_metric = bbox_scores.pow(self.alpha) * geo_metric.pow(self.beta) * boost
+        return align_metric, overlaps
 
 
 def make_anchors(feats, strides, grid_cell_offset=0.5):

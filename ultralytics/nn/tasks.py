@@ -80,6 +80,7 @@ from ultralytics.utils.checks import check_requirements, check_suffix, check_yam
 from ultralytics.utils.loss import (
     E2ELoss,
     PoseLoss26,
+    SGDADetectionLoss,
     v8ClassificationLoss,
     v8DetectionLoss,
     v8OBBLoss,
@@ -513,6 +514,8 @@ class DetectionModel(BaseModel):
 
     def init_criterion(self):
         """Initialize the loss criterion for the DetectionModel."""
+        if getattr(self.args, "sgda", False):
+            return E2ELoss(self, SGDADetectionLoss) if getattr(self, "end2end", False) else SGDADetectionLoss(self)
         return E2ELoss(self) if getattr(self, "end2end", False) else v8DetectionLoss(self)
 
 
